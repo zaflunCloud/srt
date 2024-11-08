@@ -25,7 +25,7 @@ jobs:
       - uses: jiro4989/build-deb-action@v3.1.0
         id: build
         with:
-          package: irl-libsrt
+          package: zc-libsrt
           package_root: ./build
           maintainer: zaflun <developers@withzaflun.com>
           version: ${{ steps.semantic.outputs.version }}
