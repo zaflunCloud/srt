@@ -1,0 +1,37 @@
+name: Build and Upload Debian Package
+
+on:
+  push:
+    branches:
+      - master
+  release:
+    types: [released]
+
+jobs:
+  deb:
+    runs-on: warp-ubuntu-latest-arm64-4x
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - run: sudo apt update && sudo apt install -y qemu-user-static binfmt-support
+      - uses: docker/build-push-action@v6.9.0
+        with:
+          context: .
+          outputs: build
+      - uses: paulhatch/semantic-version@v5.4.0
+        id: semantic
+        with:
+          tag_prefix: ""
+          format: ${{ github.event_name == 'release' && '${major}.${minor}.${patch}' || '${major}.${minor}.${patch}-prerelease${increment}' }}
+      - uses: jiro4989/build-deb-action@v3.1.0
+        id: build
+        with:
+          package: irl-libsrt
+          package_root: ./build
+          maintainer: zaflun <developers@withzaflun.com>
+          version: ${{ steps.semantic.outputs.version }}
+          depends: "openssl, libssl-dev"
+          arch: "arm64"
+      - uses: actions/upload-artifact@v4.4.3
+        with:
+          name: libsrt-arm64.deb
+          path: ${{ steps.build.outputs.file_name }}
