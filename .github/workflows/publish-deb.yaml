@@ -21,7 +21,7 @@ jobs:
         id: semantic
         with:
           tag_prefix: ""
-          format: ${{ github.event_name == 'release' && '${major}.${minor}.${patch}' || '${major}.${minor}.${patch}-prerelease${increment}' }}
+          version_format: ${{ github.event_name == 'release' && '${major}.${minor}.${patch}' || '${major}.${minor}.${patch}-prerelease${increment}' }}
       - uses: jiro4989/build-deb-action@v3.1.0
         id: build
         with:
