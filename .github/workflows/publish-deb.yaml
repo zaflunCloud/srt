@@ -1,9 +1,6 @@
 name: Build and Upload Debian Package
 
 on:
-  push:
-    branches:
-      - master
   release:
     types: [released]
 
