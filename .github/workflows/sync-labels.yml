@@ -1,0 +1,29 @@
+name: Sync Labels
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - next
+    paths:
+      - .github/labels.yml
+      - .github/workflows/sync-labels.yml
+
+jobs:
+  sync-labels:
+    name: Sync Labels
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 1
+      - name: Syncing labels
+        uses: crazy-max/ghaction-github-labeler@v5.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          yaml-file: .github/labels.yml
