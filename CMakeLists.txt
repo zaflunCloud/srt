@@ -25,6 +25,16 @@ else()
 	project(SRT VERSION ${SRT_VERSION} LANGUAGES C CXX)
 endif()
 
+set(CPACK_PACKAGE_NAME "zc-libsrt")
+set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
+set(CPACK_PACKAGE_ARCHITECTURE "arm64")
+set(CPACK_PACKAGE_VERSION ${SRT_VERSION})
+set(CPACK_PACKAGE_CONTACT "zaflun <developers@withzaflun.com>")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "openssl")
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+
+include(CPack)
+
 if (NOT ${CMAKE_VERSION} VERSION_LESS "3.28.1")
 	cmake_policy(SET CMP0054 NEW)
 endif ()
