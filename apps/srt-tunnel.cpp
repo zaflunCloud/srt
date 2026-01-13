@@ -39,7 +39,6 @@
 // to the library. Application using the "installed" library should
 // use <srt/srt.h>
 #include <srt.h>
-#include <udt.h> // This TEMPORARILY contains extra C++-only SRT API.
 #include <logging.h>
 #include <api.h>
 #include <utilities.h>
@@ -215,7 +214,6 @@ class Engine
 
     int status = 0;
     Medium::ReadStatus rdst = Medium::RD_ERROR;
-    UDT::ERRORINFO srtx;
 
 public:
     enum Dir { DIR_IN, DIR_OUT };
@@ -420,7 +418,7 @@ void Engine::Worker()
 
 class SrtMedium: public Medium
 {
-    SRTSOCKET m_socket = SRT_ERROR;
+    SRTSOCKET m_socket = SRT_INVALID_SOCK;
     friend class Medium;
 public:
 
@@ -441,10 +439,10 @@ public:
     {
         Verb() << "Closing SRT socket for " << uri();
         lock_guard<std::mutex> lk(access);
-        if (m_socket == SRT_ERROR)
+        if (m_socket == SRT_INVALID_SOCK)
             return;
         srt_close(m_socket);
-        m_socket = SRT_ERROR;
+        m_socket = SRT_INVALID_SOCK;
     }
 
     // Forwarded in order to separate the implementation from
@@ -470,9 +468,18 @@ protected:
 
     using Medium::Error;
 
-    static void Error(UDT::ERRORINFO& ri, const string& text)
+    static void Error(int srterror, int errnov, const string& text)
     {
-        throw TransmissionError("ERROR: " + text + ": " + ri.getErrorMessage());
+        string message = srt_strerror(srterror, errnov);
+
+        string hm = srt::Sprint("ERROR #", srterror, ": ", text, ": ", message);
+        if (errnov == 0)
+            throw TransmissionError(hm);
+        else
+        {
+            char buf[180];
+            throw TransmissionError(srt::Sprint(hm, ": #", errnov, ": ", SysStrError(errnov, buf, 179)));
+        }
     }
 
     ~SrtMedium() override
@@ -625,19 +632,23 @@ void SrtMedium::CreateListener()
 
     sockaddr_any sa = CreateAddr(m_uri.host(), m_uri.portno());
 
-    int stat = srt_bind(m_socket, sa.get(), sizeof sa);
+    SRTSTATUS stat = srt_bind(m_socket, sa.get(), sizeof sa);
 
-    if ( stat == SRT_ERROR )
+    if (stat == SRT_ERROR)
     {
+        int errnov = 0;
+        int result = srt_getlasterror(&errnov);
         srt_close(m_socket);
-        Error(UDT::getlasterror(), "srt_bind");
+        Error(result, errnov, "srt_bind");
     }
 
     stat = srt_listen(m_socket, backlog);
-    if ( stat == SRT_ERROR )
+    if (stat == SRT_ERROR)
     {
+        int errnov = 0;
+        int result = srt_getlasterror(&errnov);
         srt_close(m_socket);
-        Error(UDT::getlasterror(), "srt_listen");
+        Error(result, errnov, "srt_listen");
     }
 
     m_listener = true;
@@ -675,9 +686,11 @@ unique_ptr<Medium> SrtMedium::Accept()
 {
     sockaddr_any sa;
     SRTSOCKET s = srt_accept(m_socket, (sa.get()), (&sa.len));
-    if (s == SRT_ERROR)
+    if (s == SRT_INVALID_SOCK)
     {
-        Error(UDT::getlasterror(), "srt_accept");
+        int errnov = 0;
+        int result = srt_getlasterror(&errnov);
+        Error(result, errnov, "srt_accept");
     }
 
     ConfigurePost(s);
@@ -735,9 +748,13 @@ void SrtMedium::Connect()
 {
     sockaddr_any sa = CreateAddr(m_uri.host(), m_uri.portno());
 
-    int st = srt_connect(m_socket, sa.get(), sizeof sa);
-    if (st == SRT_ERROR)
-        Error(UDT::getlasterror(), "srt_connect");
+    SRTSOCKET st = srt_connect(m_socket, sa.get(), sizeof sa);
+    if (st == SRT_INVALID_SOCK)
+    {
+        int errnov = 0;
+        int result = srt_getlasterror(&errnov);
+        Error(result, errnov, "srt_connect");
+    }
 
     ConfigurePost(m_socket);
 
@@ -767,7 +784,7 @@ int SrtMedium::ReadInternal(char* w_buffer, int size)
     do
     {
         st = srt_recv(m_socket, (w_buffer), size);
-        if (st == SRT_ERROR)
+        if (st == int(SRT_ERROR))
         {
             int syserr;
             if (srt_getlasterror(&syserr) == SRT_EASYNCRCV && !m_broken)
@@ -886,9 +903,11 @@ Medium::ReadStatus Medium::Read(bytevector& w_output)
 void SrtMedium::Write(bytevector& w_buffer)
 {
     int st = srt_send(m_socket, w_buffer.data(), (int)w_buffer.size());
-    if (st == SRT_ERROR)
+    if (st == int(SRT_ERROR))
     {
-        Error(UDT::getlasterror(), "srt_send");
+        int errnov = 0;
+        int result = srt_getlasterror(&errnov);
+        Error(result, errnov, "srt_send");
     }
 
     // This should be ==, whereas > is not possible, but

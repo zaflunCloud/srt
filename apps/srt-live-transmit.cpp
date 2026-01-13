@@ -77,7 +77,6 @@
 // to the library. Application using the "installed" library should
 // use <srt/srt.h>
 #include <srt.h>
-#include <udt.h> // This TEMPORARILY contains extra C++-only SRT API.
 #include <logging.h>
 
 using namespace std;
@@ -519,7 +518,7 @@ int main(int argc, char** argv)
                 {
                 case UriParser::SRT:
                     if (srt_epoll_add_usock(pollid,
-                        src->GetSRTSocket(), &events))
+                        src->GetSRTSocket(), &events) == SRT_ERROR)
                     {
                         cerr << "Failed to add SRT source to poll, "
                             << src->GetSRTSocket() << endl;
@@ -529,7 +528,7 @@ int main(int argc, char** argv)
                 case UriParser::UDP:
                 case UriParser::RTP:
                     if (srt_epoll_add_ssock(pollid,
-                        src->GetSysSocket(), &events))
+                        src->GetSysSocket(), &events) == SRT_ERROR)
                     {
                         cerr << "Failed to add " << src->uri.proto()
                             << " source to poll, " << src->GetSysSocket()
@@ -541,7 +540,7 @@ int main(int argc, char** argv)
                     {
                         const int con = src->GetSysSocket();
                         // try to make the standard input non blocking
-                        if (srt_epoll_add_ssock(pollid, con, &events))
+                        if (srt_epoll_add_ssock(pollid, con, &events) == SRT_ERROR)
                         {
                             cerr << "Failed to add FILE source to poll, "
                                 << src->GetSysSocket() << endl;
@@ -573,7 +572,7 @@ int main(int argc, char** argv)
                 {
                 case UriParser::SRT:
                     if (srt_epoll_add_usock(pollid,
-                        tar->GetSRTSocket(), &events))
+                        tar->GetSRTSocket(), &events) == SRT_ERROR)
                     {
                         cerr << "Failed to add SRT destination to poll, "
                             << tar->GetSRTSocket() << endl;
@@ -647,7 +646,7 @@ int main(int argc, char** argv)
                         SRTSOCKET ns = (issource) ?
                             src->GetSRTSocket() : tar->GetSRTSocket();
                         int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
-                        if (srt_epoll_add_usock(pollid, ns, &events))
+                        if (srt_epoll_add_usock(pollid, ns, &events) == SRT_ERROR)
                         {
                             cerr << "Failed to add SRT client to poll, "
                                 << ns << endl;
@@ -745,7 +744,7 @@ int main(int argc, char** argv)
                                 const int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
                                 // Disable OUT event polling when connected
                                 if (srt_epoll_update_usock(pollid,
-                                    tar->GetSRTSocket(), &events))
+                                    tar->GetSRTSocket(), &events) == SRT_ERROR)
                                 {
                                     cerr << "Failed to add SRT destination to poll, "
                                         << tar->GetSRTSocket() << endl;
@@ -811,7 +810,7 @@ int main(int argc, char** argv)
                         std::shared_ptr<MediaPacket> pkt(new MediaPacket(transmit_chunk_size));
                         const int res = src->Read(transmit_chunk_size, *pkt, out_stats);
 
-                        if (res == SRT_ERROR && src->uri.type() == UriParser::SRT)
+                        if (res == int(SRT_ERROR) && src->uri.type() == UriParser::SRT)
                         {
                             if (srt_getlasterror(NULL) == SRT_EASYNCRCV)
                                 break;

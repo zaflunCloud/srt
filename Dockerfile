@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install cmake make wget xz-utils git build-essential libssl-dev openssl -y
 
 WORKDIR /libsrt
-COPY srt-belabox .
+COPY . .
 
 RUN mkdir /out
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr ./

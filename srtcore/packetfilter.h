@@ -16,8 +16,8 @@
 #include <string>
 
 #include "packet.h"
-#include "packetfilter_api.h"
 #include "utilities.h"
+#include "packetfilter_api.h"
 
 namespace srt {
 
@@ -164,7 +164,7 @@ public:
             return i->second.get();
         }
         bool ParseConfig(const std::string& s, SrtFilterConfig& out, PacketFilter::Factory** ppf = NULL);
-        bool CheckFilterCompat(srt::SrtFilterConfig& w_agent, const srt::SrtFilterConfig& peer);
+        bool CheckFilterCompat(SrtFilterConfig& w_agent, const SrtFilterConfig& peer);
     public:
         Internal();
     };

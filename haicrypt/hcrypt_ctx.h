@@ -22,9 +22,9 @@ written by
 #ifndef HCRYPT_CTX_H
 #define HCRYPT_CTX_H
 
-#include "hcrypt.h"
 #include <stdbool.h>
 #include <sys/types.h>
+#include "hcrypt.h"
 
 #if !defined(HAISRT_VERSION_INT)
 #include "haicrypt.h"

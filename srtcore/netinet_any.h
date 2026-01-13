@@ -16,10 +16,10 @@ written by
 #ifndef INC_SRT_NETINET_ANY_H
 #define INC_SRT_NETINET_ANY_H
 
-#include "platform_sys.h"
 #include <cstring> // memcmp
-#include <sstream>
 #include <string>
+#include <sstream>
+#include "platform_sys.h"
 
 // This structure should replace every use of sockaddr and its currently
 // used specializations, sockaddr_in and sockaddr_in6. This is to simplify

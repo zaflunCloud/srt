@@ -53,6 +53,7 @@ modified by
 #include "platform_sys.h"
 
 #include <cmath>
+#include <fstream> // for debug purposes
 #include "buffer_snd.h"
 #include "packet.h"
 #include "core.h" // provides some constants
@@ -680,6 +681,18 @@ int CSndBuffer::dropLateData(int& w_bytes, int32_t& w_first_msgno, const steady_
     updAvgBufSize(steady_clock::now());
 
     return (dpkts);
+}
+
+int CSndBuffer::dropAll(int& w_bytes)
+{
+    ScopedLock bufferguard(m_BufLock);
+    const int  dpkts = m_iCount;
+    w_bytes          = m_iBytesCount;
+    m_pFirstBlock = m_pCurrBlock = m_pLastBlock;
+    m_iCount                     = 0;
+    m_iBytesCount                = 0;
+    updAvgBufSize(steady_clock::now());
+    return dpkts;
 }
 
 void CSndBuffer::increase()

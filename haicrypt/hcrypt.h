@@ -42,13 +42,12 @@ written by
 #define ATR_UNUSED
 #endif
 
-#include "cryspr.h"
 #include "haicrypt.h"
-#include "hcrypt_ctx.h"
 #include "hcrypt_msg.h"
+#include "hcrypt_ctx.h"
+#include "cryspr.h"
 
-// #define HCRYPT_DEV 1  /* Development: should not be defined in committed code
-// */
+//#define HCRYPT_DEV 1  /* Development: should not be defined in committed code */
 
 #ifdef HAICRYPT_SUPPORT_CRYPTO_API
 /* See CRYPTOFEC_OBJECT in session structure */

@@ -7,10 +7,11 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 
-cmake_minimum_required (VERSION 2.8.12 FATAL_ERROR)
-set (SRT_VERSION 1.5.4)
+cmake_minimum_required (VERSION 3.5 FATAL_ERROR)
+set (SRT_VERSION 1.6.0)
 
-set (CMAKE_MODULE_PATH "scripts")
+set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+include(CheckSymbolExists)
 include(haiUtil) # needed for set_version_variables
 # CMake version 3.0 introduced the VERSION option of the project() command
 # to specify a project version as well as the name.
@@ -174,6 +175,7 @@ option(ENABLE_PKTINFO "Enable using IP_PKTINFO to allow the listener extracting 
 option(ENABLE_RELATIVE_LIBPATH "Should application contain relative library paths, like ../lib" OFF)
 option(ENABLE_GETNAMEINFO "In-logs sockaddr-to-string should do rev-dns" OFF)
 option(ENABLE_UNITTESTS "Enable unit tests" OFF)
+option(ENABLE_UNITTESTS_DISCOVERY "Do unit test discovery when unit tests enabled" ON)
 option(ENABLE_ENCRYPTION "Enable encryption in SRT" ON)
 option(ENABLE_AEAD_API_PREVIEW "Enable AEAD API preview in SRT" Off)
 option(ENABLE_MAXREXMITBW "Enable SRTO_MAXREXMITBW (v1.6.0 API preview)" Off)
@@ -187,6 +189,7 @@ option(USE_OPENSSL_PC "Use pkg-config to find OpenSSL libraries" ON)
 option(SRT_USE_OPENSSL_STATIC_LIBS "Link OpenSSL libraries statically." OFF)
 option(USE_BUSY_WAITING "Enable more accurate sending times at a cost of potentially higher CPU load" OFF)
 option(USE_GNUSTL "Get c++ library/headers from the gnustl.pc" OFF)
+option(ENABLE_LOCALIF_WIN32 "Enable local interface check ability on Windows (adds Iphlpapi.lib dep)" OFF)
 option(ENABLE_SOCK_CLOEXEC "Enable setting SOCK_CLOEXEC on a socket" ON)
 option(ENABLE_SHOW_PROJECT_CONFIG "Enable show Project Configuration" OFF)
 
@@ -331,7 +334,7 @@ if(WIN32)
 		check_function_exists(inet_pton HAVE_INET_PTON)
 		try_compile(AT_LEAST_VISTA
 			${CMAKE_BINARY_DIR}
-			"scripts/test_vista.c")
+			"${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_vista.c")
 		if(NOT AT_LEAST_VISTA)
 			# force targeting Vista
 			add_definitions(-D_WIN32_WINNT=0x0600)
@@ -740,7 +743,7 @@ if (FORCE_CXX_STANDARD)
 endif()
 
 # add extra warning flags for gccish compilers
-if (HAVE_COMPILER_GNU_COMPAT)
+if ((HAVE_COMPILER_GNU_COMPAT) AND (NOT DEFINED SRT_GCC_WARN))
 	set (SRT_GCC_WARN "-Wall -Wextra")
 	if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7.0 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 		set (SRT_GCC_WARN "${SRT_GCC_WARN} -Wshadow=local")
@@ -749,6 +752,7 @@ else()
 	# cpp debugging on Windows :D
 	#set (SRT_GCC_WARN "/showIncludes")
 endif()
+message(STATUS "WARNING OPTIONS: ${SRT_GCC_WARN}")
 
 if (USE_STATIC_LIBSTDCXX)
 	if (HAVE_COMPILER_GNU_COMPAT)
@@ -784,10 +788,10 @@ if (srt_libspec_static)
 endif()
 
 set (SRT_SRC_HAICRYPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/haicrypt)
-set (SRT_SRC_SRTCORE_DIR srtcore)
+set (SRT_SRC_SRTCORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/srtcore)
 set (SRT_SRC_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 set (SRT_SRC_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-set (SRT_SRC_TEST_DIR test)
+set (SRT_SRC_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test)
 
 if(WIN32)
 	message(STATUS "DETECTED SYSTEM: WINDOWS;  WIN32=1; PTW32_STATIC_LIB=1")
@@ -885,7 +889,8 @@ if (ENABLE_THREAD_CHECK)
 endif()
 
 if (ENABLE_CLANG_TSA)
-	list(APPEND SRT_EXTRA_CFLAGS "-Wthread-safety")
+	list(APPEND SRT_EXTRA_CFLAGS "-Wthread-safety -Wthread-safety-beta")
+    add_definitions(-DSRT_ENABLE_CLANG_TSA=1)
 	message(STATUS "Clang TSA: Enabled")
 endif()
 
@@ -972,8 +977,22 @@ elseif (MICROSOFT)
 else ()
 	find_package(Threads REQUIRED)
 	set(PTHREAD_LIBRARY ${CMAKE_THREAD_LIBS_INIT})
+	message(STATUS "Pthread library: ${PTHREAD_LIBRARY}")
 endif()
 
+# To avoid the need for other judgments when ENABLE_STDCXX_SYNC is OFF in the future, this is a separate conditional statement.
+if (NOT ENABLE_STDCXX_SYNC AND ENABLE_MONOTONIC_CLOCK)
+	list(PREPEND CMAKE_REQUIRED_LIBRARIES "${PTHREAD_LIBRARY}")
+	unset(CMAKE_REQUIRED_QUIET)
+	check_symbol_exists(pthread_condattr_setclock "pthread.h" HAVE_PTHREAD_CONDATTR_SETCLOCK)
+	message(STATUS "Checking pthread_condattr_setclock: '${HAVE_PTHREAD_CONDATTR_SETCLOCK}'")
+	if ("${HAVE_PTHREAD_CONDATTR_SETCLOCK}" STREQUAL "1")
+		message(STATUS "FOUND pthread_condattr_setclock - pthread_cond_timedwait will use monotonic clock")
+		add_definitions(-DHAVE_PTHREAD_CONDATTR_SETCLOCK=1)
+	else ()
+		message(WARNING "NOT FOUND pthread_cond_timedwait. pthread_cond_timedwait will use system clock. Recommended -DENABLE_STDCXX_SYNC=ON")
+	endif ()
+endif ()
 # This is required in some projects that add some other sources
 # to the SRT library to be compiled together (aka "virtual library").
 if (DEFINED SRT_EXTRA_LIB_INC)
@@ -1114,6 +1133,10 @@ if (srt_libspec_shared)
 	if (ENABLE_ENCRYPTION)
 		target_link_libraries(${TARGET_srt}_shared PRIVATE ${SSL_LIBRARIES})
 	endif()
+	if (WIN32 AND ENABLE_LOCALIF_WIN32)
+		target_link_libraries(${TARGET_srt}_shared PRIVATE Iphlpapi)
+		add_definitions(-DSRT_ENABLE_LOCALIF_WIN32)
+	endif()
 	if (MICROSOFT)
 		target_link_libraries(${TARGET_srt}_shared PRIVATE ws2_32.lib)
 		if (NOT (ENABLE_ENCRYPTION AND "${USE_ENCLIB}" STREQUAL "botan"))
@@ -1135,6 +1158,10 @@ endif()
 
 if (srt_libspec_static)
 	add_library(${TARGET_srt}_static STATIC ${OBJECT_LIB_SUPPORT} ${VIRTUAL_srt})
+	if (WIN32 AND ENABLE_LOCALIF_WIN32)
+		target_link_libraries(${TARGET_srt}_static PRIVATE Iphlpapi)
+		add_definitions(-DSRT_ENABLE_LOCALIF_WIN32)
+	endif()
 
 	# For Windows, leave the name to be "srt_static.lib".
 	# Windows generates two different library files:
@@ -1334,6 +1361,10 @@ macro(srt_add_program_dont_install name)
 	add_executable(${name} ${ARGN})
 	target_include_directories(${name} PRIVATE apps)
 	target_include_directories(${name} PRIVATE common)
+	if (WIN32 AND ENABLE_LOCALIF_WIN32)
+		target_link_libraries(${name} Iphlpapi)
+		add_definitions(-DSRT_ENABLE_LOCALIF_WIN32)
+	endif()
 endmacro()
 
 macro(srt_add_program name)
@@ -1550,7 +1581,7 @@ if (ENABLE_UNITTESTS AND ENABLE_CXX11)
 		message(STATUS "GTEST not found! Fetching from git.")
 		include(googletest)
 		fetch_googletest(
-				scripts
+			${PROJECT_SOURCE_DIR}/scripts
 			${PROJECT_BINARY_DIR}/googletest
 		)
 		set(GTEST_BOTH_LIBRARIES "gtest_main" CACHE STRING "Add gtest_main target")
@@ -1581,7 +1612,9 @@ if (ENABLE_UNITTESTS AND ENABLE_CXX11)
 		#set_tests_properties(test-srt PROPERTIES RUN_SERIAL TRUE)
 	else()
 		set_tests_properties(${tests_srt} PROPERTIES RUN_SERIAL TRUE)
-		gtest_discover_tests(test-srt)
+		if (ENABLE_UNITTESTS_DISCOVERY)
+			gtest_discover_tests(test-srt)
+		endif()
 	endif()
 
 	enable_testing()

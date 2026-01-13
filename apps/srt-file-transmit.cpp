@@ -16,6 +16,7 @@ written by
 #include <direct.h>
 #endif
 #include <iostream>
+#include <fstream>
 #include <iterator>
 #include <vector>
 #include <map>
@@ -27,7 +28,6 @@ written by
 #include <cassert>
 #include <sys/stat.h>
 #include <srt.h>
-#include <udt.h>
 #include <common.h>
 
 #include "apputil.hpp"
@@ -44,6 +44,7 @@ written by
 
 
 using namespace std;
+using namespace srt;
 
 static bool interrupt = false;
 void OnINT_ForceExit(int)
@@ -180,7 +181,7 @@ int parse_args(FileTransmitConfig &cfg, int argc, char** argv)
         return 2;
     }
 
-    cfg.chunk_size    = stoul(Option<OutString>(params, "1456", o_chunk));
+    cfg.chunk_size    = stoul(Option<OutString>(params, "0", o_chunk));
     cfg.skip_flushing = Option<OutBool>(params, false, o_no_flush);
     cfg.bw_report     = stoi(Option<OutString>(params, "0", o_bwreport));
     cfg.stats_report  = stoi(Option<OutString>(params, "0", o_statsrep));
@@ -309,7 +310,7 @@ bool DoUpload(UriParser& ut, string path, string filename,
 
             int events = SRT_EPOLL_OUT | SRT_EPOLL_ERR;
             if (srt_epoll_add_usock(pollid,
-                    tar->GetSRTSocket(), &events))
+                    tar->GetSRTSocket(), &events) == SRT_ERROR)
             {
                 cerr << "Failed to add SRT destination to poll, "
                     << tar->GetSRTSocket() << endl;
@@ -349,7 +350,7 @@ bool DoUpload(UriParser& ut, string path, string filename,
 
                 s = tar->GetSRTSocket();
                 int events = SRT_EPOLL_OUT | SRT_EPOLL_ERR;
-                if (srt_epoll_add_usock(pollid, s, &events))
+                if (srt_epoll_add_usock(pollid, s, &events) == SRT_ERROR)
                 {
                     cerr << "Failed to add SRT client to poll" << endl;
                     goto exit;
@@ -391,7 +392,7 @@ bool DoUpload(UriParser& ut, string path, string filename,
                 int st = tar->Write(buf.data() + shift, n, 0, out_stats);
                 Verb() << "Upload: " << n << " --> " << st
                     << (!shift ? string() : "+" + Sprint(shift));
-                if (st == SRT_ERROR)
+                if (st == int(SRT_ERROR))
                 {
                     cerr << "Upload: SRT error: " << srt_getlasterror_str()
                         << endl;
@@ -429,7 +430,7 @@ bool DoUpload(UriParser& ut, string path, string filename,
             size_t bytes;
             size_t blocks;
             int st = srt_getsndbuffer(s, &blocks, &bytes);
-            if (st == SRT_ERROR)
+            if (st == int(SRT_ERROR))
             {
                 cerr << "Error in srt_getsndbuffer: " << srt_getlasterror_str()
                     << endl;
@@ -490,7 +491,7 @@ bool DoDownload(UriParser& us, string directory, string filename,
 
             int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
             if (srt_epoll_add_usock(pollid,
-                    src->GetSRTSocket(), &events))
+                    src->GetSRTSocket(), &events) == SRT_ERROR)
             {
                 cerr << "Failed to add SRT source to poll, "
                     << src->GetSRTSocket() << endl;
@@ -528,7 +529,7 @@ bool DoDownload(UriParser& us, string directory, string filename,
 
                 s = src->GetSRTSocket();
                 int events = SRT_EPOLL_IN | SRT_EPOLL_ERR;
-                if (srt_epoll_add_usock(pollid, s, &events))
+                if (srt_epoll_add_usock(pollid, s, &events) == SRT_ERROR)
                 {
                     cerr << "Failed to add SRT client to poll" << endl;
                     goto exit;
@@ -593,7 +594,7 @@ bool DoDownload(UriParser& us, string directory, string filename,
             }
 
             int n = src->Read(cfg.chunk_size, packet, out_stats);
-            if (n == SRT_ERROR)
+            if (n == int(SRT_ERROR))
             {
                 cerr << "Download: SRT error: " << srt_getlasterror_str() << endl;
                 goto exit;
@@ -681,8 +682,11 @@ int main(int argc, char** argv)
     //
     // Set global config variables
     //
-    if (cfg.chunk_size != SRT_LIVE_MAX_PLSIZE)
+    if (cfg.chunk_size != 0)
         transmit_chunk_size = cfg.chunk_size;
+    else
+        transmit_chunk_size = SRT_MAX_PLSIZE_AF_INET;
+
     transmit_stats_writer = SrtStatsWriterFactory(cfg.stats_pf);
     transmit_bw_report = cfg.bw_report;
     transmit_stats_report = cfg.stats_report;
