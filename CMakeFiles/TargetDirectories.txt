@@ -1,0 +1,15 @@
+/workspace/rapha/zcloud/srt/CMakeFiles/srt_virtual.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srt_shared.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srt_static.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srtsupport_virtual.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srt-live-transmit.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srt-file-transmit.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/srt-tunnel.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/package.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/package_source.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/edit_cache.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/rebuild_cache.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/list_install_components.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/install.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/install/local.dir
+/workspace/rapha/zcloud/srt/CMakeFiles/install/strip.dir

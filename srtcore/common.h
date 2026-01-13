@@ -64,11 +64,11 @@ modified by
    //#include <windows.h>
 #endif
 
-#include "srt.h"
-#include "utilities.h"
-#include "sync.h"
 #include "netinet_any.h"
 #include "packetfilter_api.h"
+#include "srt.h"
+#include "sync.h"
+#include "utilities.h"
 
 // System-independent errno
 #ifndef _WIN32
@@ -1437,7 +1437,6 @@ inline bool checkMappedIPv4(const sockaddr_in6& sa)
 
 std::string FormatLossArray(const std::vector< std::pair<int32_t, int32_t> >& lra);
 std::ostream& PrintEpollEvent(std::ostream& os, int events, int et_events = 0);
-std::string FormatValue(int value, int factor, const char* unit);
 
 } // namespace srt
 

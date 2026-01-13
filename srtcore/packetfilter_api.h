@@ -14,10 +14,10 @@
 #include "platform_sys.h"
 
 #include <cstring>
-#include <string>
 #include <map>
-#include <vector>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace srt {
 

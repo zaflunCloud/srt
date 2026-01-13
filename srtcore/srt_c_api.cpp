@@ -26,14 +26,6 @@ written by
 using namespace std;
 using namespace srt;
 
-namespace srt
-{
-// This is provided in strerror_defs.cpp, which doesn't have
-// its header file.
-// XXX Consider adding some static function to CUDTException.
-const char* strerror_get_message(size_t major, size_t minor);
-}
-
 
 extern "C" {
 
@@ -256,9 +248,11 @@ int srt_getlasterror(int* loc_errno)
     return CUDT::getlasterror().getErrorCode();
 }
 
-const char* srt_strerror(int code, int /*err ignored*/)
+const char* srt_strerror(int code, int err)
 {
-    return strerror_get_message(CodeMajor(code/1000), CodeMinor(code%1000));
+    static srt::CUDTException e;
+    e = srt::CUDTException(CodeMajor(code/1000), CodeMinor(code%1000), err);
+    return(e.getErrorMessage());
 }
 
 

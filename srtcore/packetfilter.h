@@ -16,8 +16,8 @@
 #include <string>
 
 #include "packet.h"
-#include "utilities.h"
 #include "packetfilter_api.h"
+#include "utilities.h"
 
 namespace srt {
 
