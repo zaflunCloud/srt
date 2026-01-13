@@ -1284,7 +1284,7 @@ TEST(Bonding, BackupPrioritySelection)
 
     g_nconnected = 0;
     g_nfailed = 0;
-    volatile bool recvd = false;
+    sync::atomic<bool> recvd { false };
 
     // 1.
     sockaddr_in bind_sa;
@@ -1594,3 +1594,12 @@ CheckLinksAgain:
 }
 
 
+TEST(Bonding, ApiConfig)
+{
+    using namespace std;
+    SRT_SOCKOPT_CONFIG config;
+
+    string example = "example_long_excessively";
+
+    EXPECT_EQ(srt_config_add(&config, SRTO_BINDTODEVICE, (void*)example.data(), example.size()), 0);
+}
