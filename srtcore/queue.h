@@ -157,7 +157,6 @@ public:
     };
 
     static EReschedule rescheduleIf(bool cond) { return cond ? DO_RESCHEDULE : DONT_RESCHEDULE; }
-    void resetAtFork();
 
     /// Update the timestamp of the UDT instance on the list.
     /// @param [in] u pointer to the UDT instance
@@ -402,7 +401,6 @@ public:
     ~CSndQueue();
 
 public:
-    void resetAtFork();
     // XXX There's currently no way to access the socket ID set for
     // whatever the queue is currently working for. Required to find
     // some way to do this, possibly by having a "reverse pointer".
@@ -441,7 +439,6 @@ public:
     int sockoptQuery(int level, int type) const;
 
     void setClosing() { m_bClosing = true; }
-    void stop();
 
 private:
     static void*  worker(void* param);
@@ -489,7 +486,6 @@ public:
     ~CRcvQueue();
 
 public:
-    void resetAtFork();
     // XXX There's currently no way to access the socket ID set for
     // whatever the queue is currently working. Required to find
     // some way to do this, possibly by having a "reverse pointer".
@@ -517,7 +513,6 @@ public:
 
     int getIPversion() { return m_iIPversion; }
 
-    void stop();
 private:
     static void*  worker(void* param);
     sync::CThread m_WorkerThread;
@@ -543,9 +538,8 @@ private:
 #endif
 
 private:
-    bool setListener(CUDT* u);
-    CUDT* getListener();
-    bool removeListener(CUDT* u);
+    int  setListener(CUDT* u);
+    void removeListener(const CUDT* u);
 
     void registerConnector(const SRTSOCKET&                      id,
                            CUDT*                                 u,
@@ -604,19 +598,6 @@ struct CMultiplexer
     {
     }
 
-    ~CMultiplexer()
-    {
-        if (m_pRcvQueue != NULL)
-            delete m_pRcvQueue;
-        if (m_pSndQueue != NULL)
-            delete m_pSndQueue;
-        if (m_pTimer != NULL)
-            delete m_pTimer;
-        close();
-    }
-    void resetAtFork();
-    void close();
-    void stop();
     void destroy();
 };
 

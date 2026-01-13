@@ -53,11 +53,11 @@ modified by
 #ifndef INC_SRT_PACKET_H
 #define INC_SRT_PACKET_H
 
-#include "udt.h"
 #include "common.h"
-#include "utilities.h"
 #include "netinet_any.h"
 #include "packetfilter_api.h"
+#include "udt.h"
+#include "utilities.h"
 
 namespace srt
 {

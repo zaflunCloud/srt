@@ -159,133 +159,6 @@ class CUDTSocket;
 class CUDTGroup;
 #endif
 
-#ifdef ENABLE_RATE_MEASUREMENT
-struct RateMeasurement
-{
-    typedef sync::steady_clock clock_type;
-    typedef clock_type::time_point clock_time;
-    typedef clock_type::duration clock_interval;
-
-    static const int SLICE_INTERVAL_MS = 20;
-    static const size_t MIN_SLICES = 5; // min 
-    static const size_t MAX_SLICES = 10;
-
-    sync::Mutex m_lock;
-
-    size_t m_SysHeaderSize;
-
-    // Instantaneous data updated by sending packets
-    // AFFINITY: Snd:worker thread
-    // MODE: write
-    sync::atomic<int> m_nInstaPackets;
-    sync::atomic<int> m_nInstaBytes;
-
-    void dataUpdate(int packets, int bytes)
-    {
-        sync::ScopedLock lk (m_lock);
-        m_nInstaPackets = m_nInstaPackets + packets;
-        m_nInstaBytes = m_nInstaBytes + bytes;
-    }
-
-    // Cached last measurement
-    // AFFINITY: Snd:worker thread MODE: read
-    // AFFINITY: Rcv:worker thread MODE: write
-    // (not locking because one data is updated at a time).
-    sync::atomic<int64_t> m_currentPktRate;
-    sync::atomic<int64_t> m_currentByteRate;
-    int64_t rateBytes() const
-    {
-        return m_currentByteRate;
-    }
-    int64_t ratePackets() const
-    {
-        return m_currentPktRate;
-    }
-
-    // Time of the last checkpoint or initialization
-    clock_time m_beginTime;
-
-    struct Slice
-    {
-        int packets;
-        int bytes;
-        clock_time begin_time;
-
-        Slice(): packets(0), bytes(0) {} // clock_time is non-POD
-        Slice(const clock_time& t): packets(0), bytes(0), begin_time(t) {}
-
-    };
-
-    struct Summary: Slice
-    {
-        Summary(const clock_time& earliest_time): Slice(earliest_time), nsamples(0) {}
-
-        unsigned char nsamples;
-
-        void consume(const Slice& another)
-        {
-            if (is_zero(begin_time))
-                begin_time = another.begin_time;
-            packets += another.packets;
-            bytes += another.bytes;
-            nsamples++;
-        }
-
-        int64_t ratePackets(const clock_time& end_time) const
-        {
-            double packets_per_micro = double(packets) * 1000 * 1000;
-            double rate = packets_per_micro / count_microseconds(end_time - begin_time);
-            return rate;
-        }
-
-        int64_t rateBytes(const clock_time& end_time, size_t hdr_size) const
-        {
-            double data_bytes = bytes + (packets * hdr_size);
-            double bytes_per_micro = data_bytes * 1000 * 1000;
-            double rate = bytes_per_micro / count_microseconds(end_time - begin_time);
-            return rate;
-        }
-    };
-
-    std::deque<Slice> m_slices;
-
-    RateMeasurement():
-        m_SysHeaderSize(CPacket::UDP_HDR_SIZE), // XXX NOTE: IPv4 !
-        m_nInstaPackets(0),
-        m_nInstaBytes(0),
-        m_currentPktRate(0),
-        m_currentByteRate(0)
-    {
-    }
-
-    bool passedInterval(const clock_time& this_time, clock_interval& w_interval)
-    {
-        if (is_zero(m_beginTime))
-        {
-            sync::ScopedLock lk (m_lock);
-            m_beginTime = this_time;
-            w_interval = clock_interval(0);
-            return false;
-        }
-        w_interval = this_time - m_beginTime;
-        return (sync::count_milliseconds(w_interval) > SLICE_INTERVAL_MS);
-    }
-
-    // This is to be called in constructor, only once.
-    void init(const clock_time& time, size_t sys_hdr_size)
-    {
-        // Just formally.
-        sync::ScopedLock lk (m_lock);
-        m_beginTime = time;
-        m_SysHeaderSize = sys_hdr_size;
-    }
-
-    // AFFINITY: Rcv:worker thread (update thread)
-    // This function should be called in regular time periods.
-    void pickup(const clock_time& time);
-};
-#endif
-
 // XXX REFACTOR: The 'CUDT' class is to be merged with 'CUDTSocket'.
 // There's no reason for separating them, there's no case of having them
 // anyhow managed separately. After this is done, with a small help with
@@ -324,7 +197,6 @@ private: // constructor and desctructor
 public: //API
     static int startup();
     static int cleanup();
-    static int cleanupAtFork();
     static SRTSOCKET socket();
 #if ENABLE_BONDING
     static SRTSOCKET createGroup(SRT_GROUP_TYPE);
@@ -419,17 +291,6 @@ public: // internal API
     int handshakeVersion()
     {
         return m_ConnRes.m_iVersion;
-    }
-
-    int32_t handshakeCookie()
-    {
-        return m_ConnReq.m_iCookie;
-    }
-
-    static HandshakeSide handshakeSide(SRTSOCKET u);
-    HandshakeSide handshakeSide()
-    {
-        return m_SrtHsSide;
     }
 
     std::string CONID() const
@@ -575,6 +436,7 @@ public: // internal API
     // immediately to free the socket
     void notListening()
     {
+        sync::ScopedLock cg(m_ConnectionLock);
         m_bListening = false;
         m_pRcvQueue->removeListener(this);
     }
@@ -720,14 +582,11 @@ private:
     SRT_ATTR_REQUIRES2(m_RecvAckLock, m_StatsLock)
     int sndDropTooLate();
 
-    // Returns true if there is a regular packet waiting for sending
-    // and sending regular packets has priority over retransmitted ones.
-    bool isRegularSendingPriority();
-
-    // Performs updates in the measurement variables after possible
-    // extraction of a retransmission packet. Some are for debug purposes,
-    // others for retransmission rate measurement.
-    void updateSenderMeasurements(bool can_rexmit);
+    /// @bried Allow packet retransmission.
+    /// Depending on the configuration mode (live / file), retransmission
+    /// can be blocked if e.g. there are original packets pending to be sent.
+    /// @return true if retransmission is allowed; false otherwise.
+    bool isRetransmissionAllowed(const time_point& tnow);
 
     /// Connect to a UDT entity as per hs request. This will update
     /// required data in the entity, then update them also in the hs structure,
@@ -746,7 +605,6 @@ private:
     /// Close the opened UDT entity.
 
     bool closeInternal() ATR_NOEXCEPT;
-    bool closeAtFork() ATR_NOEXCEPT;
     void updateBrokenConnection();
     void completeBrokenConnectionDependencies(int errorcode);
 
@@ -889,7 +747,6 @@ private:
 
     time_point socketStartTime()
     {
-        sync::ScopedLock lk (m_StatsLock);
         return m_stats.tsStartTime;
     }
 
@@ -972,7 +829,6 @@ private:
     sync::atomic<bool> m_bConnected;             // Whether the connection is on or off
     sync::atomic<bool> m_bClosing;               // If the UDT entity is closing
     sync::atomic<bool> m_bShutdown;              // If the peer side has shutdown the connection
-    sync::atomic<bool> m_bBreaking;              // The flag that declares interrupt of the connecting process
     sync::atomic<bool> m_bBroken;                // If the connection has been broken
     sync::atomic<bool> m_bBreakAsUnstable;       // A flag indicating that the socket should become broken because it has been unstable for too long.
     sync::atomic<bool> m_bPeerHealth;            // If the peer status is normal
@@ -1004,16 +860,7 @@ private: // Sending related data
     CSndLossList* m_pSndLossList;                // Sender loss list
     CPktTimeWindow<16, 16> m_SndTimeWindow;      // Packet sending time window
 #ifdef ENABLE_MAXREXMITBW
-    size_t m_zSndAveragePacketSize;
-    size_t m_zSndMaxPacketSize;
-    // XXX Old rate estimator for rexmit
-    // CSndRateEstimator m_SndRexmitRate;      // Retransmission rate estimation.
-    CShaper m_SndRexmitShaper;
-
-#ifdef ENABLE_RATE_MEASUREMENT
-    RateMeasurement   m_SndRegularMeasurement;   // Regular rate measurement
-    RateMeasurement   m_SndRexmitMeasurement;    // Retransmission rate measurement
-#endif
+    CSndRateEstimator      m_SndRexmitRate;      // Retransmission rate estimation.
 #endif
 
     atomic_duration m_tdSendInterval;            // Inter-packet time, in CPU clock cycles
@@ -1161,8 +1008,6 @@ private: // Receiving related data
 public:
     static int installAcceptHook(SRTSOCKET lsn, srt_listen_callback_fn* hook, void* opaq);
     static int installConnectHook(SRTSOCKET lsn, srt_connect_callback_fn* hook, void* opaq);
-    static enum HandshakeSide compareCookies(int32_t req, int32_t res);
-    static enum HandshakeSide backwardCompatibleCookieContest(int32_t req, int32_t res);
 private:
     void installAcceptHook(srt_listen_callback_fn* hook, void* opaq)
     {
@@ -1200,7 +1045,6 @@ private: // synchronization: mutexes and conditions
 
     void initSynch();
     void destroySynch();
-    void resetAtFork();
     void releaseSynch();
 
 private: // Common connection Congestion Control setup
@@ -1270,11 +1114,6 @@ private: // Generation and processing of packets
     /// @param packet [in, out] a packet structure to fill
     /// @return payload size on success, <=0 on failure
     int packLostData(CPacket &packet);
-
-    std::pair<int32_t, int> getCleanRexmitOffset();
-    bool checkRexmitRightTime(int offset, const srt::sync::steady_clock::time_point& current_time);
-    int extractCleanRexmitPacket(int32_t seqno, int offset, CPacket& w_packet,
-        srt::sync::steady_clock::time_point& w_tsOrigin);
 
     /// Pack a unique data packet (never sent so far) in CPacket for sending.
     /// @param packet [in, out] a CPacket structure to fill.
@@ -1405,9 +1244,6 @@ private: // for epoll
     void removeEPollEvents(const int eid);
     void removeEPollID(const int eid);
 };
-
-// DEBUG SUPPORT
-HandshakeSide getHandshakeSide(SRTSOCKET s);
 
 } // namespace srt
 

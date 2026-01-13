@@ -120,7 +120,6 @@ public:
     }
 
     ~CUDTSocket();
-    void resetAtFork();
 
     void construct();
 
@@ -216,11 +215,6 @@ public:
         core().m_bClosing = true;
     }
 
-    void setBreaking()
-    {
-        core().m_bBreaking = true;
-    }
-
     /// This does the same as setClosed, plus sets the m_bBroken to true.
     /// Such a socket can still be read from so that remaining data from
     /// the receiver buffer can be read, but no longer sends anything.
@@ -269,7 +263,6 @@ public:
     /// release the UDT library.
     /// @return 0 if success, otherwise -1 is returned.
     int cleanup();
-    int cleanupAtFork();
 
     /// Create a new UDT socket.
     /// @param [out] pps Variable (optional) to which the new socket will be written, if succeeded
@@ -414,7 +407,7 @@ private:
     groups_t m_Groups;
 #endif
 
-    sync::SharedMutex m_GlobControlLock; // used to synchronize UDT API
+    sync::Mutex m_GlobControlLock; // used to synchronize UDT API
 
     sync::Mutex m_IDLock; // used to synchronize ID generation
 
@@ -471,7 +464,6 @@ private:
     bool acquireSocket(CUDTSocket* s);
     bool startGarbageCollector();
     void stopGarbageCollector();
-    void cleanupAllSockets();
     void closeAllSockets();
 
 public:

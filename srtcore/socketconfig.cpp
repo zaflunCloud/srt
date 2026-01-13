@@ -889,6 +889,15 @@ struct CSrtConfigSetter<SRTO_RETRANSMITALGO>
     }
 };
 
+template<>
+struct CSrtConfigSetter<SRTO_SRTLAPATCHES>
+{
+    static void set(CSrtConfig& co, const void* optval, int optlen)
+    {
+        co.srtlaPatches = cast_optval<bool>(optval, optlen);
+    }
+};
+
 #ifdef ENABLE_AEAD_API_PREVIEW
 template<>
 struct CSrtConfigSetter<SRTO_CRYPTOMODE>
@@ -985,6 +994,7 @@ int dispatchSet(SRT_SOCKOPT optName, CSrtConfig& co, const void* optval, int opt
 #ifdef ENABLE_MAXREXMITBW
         DISPATCH(SRTO_MAXREXMITBW);
 #endif
+        DISPATCH(SRTO_SRTLAPATCHES)
 
 #undef DISPATCH
     default:
@@ -1092,7 +1102,7 @@ bool SRT_SocketOptionObject::add(SRT_SOCKOPT optname, const void* optval, size_t
     // needed - and it's better to not risk that alighment rules
     // will make these calculations result in less space than needed.
     const size_t headersize = sizeof(SingleOption);
-    const size_t payload = std::max(sizeof(uint32_t), optlen);
+    const size_t payload = std::min(sizeof(uint32_t), optlen);
     unsigned char* mem = new unsigned char[headersize + payload];
     SingleOption* option = reinterpret_cast<SingleOption*>(mem);
     option->option = optname;

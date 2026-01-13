@@ -7,11 +7,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #
 
-cmake_minimum_required (VERSION 3.5 FATAL_ERROR)
-set (SRT_VERSION 1.5.5)
+cmake_minimum_required (VERSION 2.8.12 FATAL_ERROR)
+set (SRT_VERSION 1.5.4)
 
-set (CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
-include(CheckSymbolExists)
+set (CMAKE_MODULE_PATH "scripts")
 include(haiUtil) # needed for set_version_variables
 # CMake version 3.0 introduced the VERSION option of the project() command
 # to specify a project version as well as the name.
@@ -25,11 +24,12 @@ else()
 	project(SRT VERSION ${SRT_VERSION} LANGUAGES C CXX)
 endif()
 
-set(CPACK_PACKAGE_NAME "zc-libsrt")
+
+set(CPACK_PACKAGE_NAME "irl-libsrt")
 set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm64")
 set(CPACK_PACKAGE_ARCHITECTURE "arm64")
 set(CPACK_PACKAGE_VERSION ${SRT_VERSION})
-set(CPACK_PACKAGE_CONTACT "zaflun <developers@withzaflun.com>")
+set(CPACK_PACKAGE_CONTACT "IRL Software <mail@irl.software>")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "openssl")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 
@@ -132,16 +132,6 @@ endforeach()
 # SRT_MAVG_SAMPLING_RATE 40       /* Max sampling rate */
 # SRT_ENABLE_FREQUENT_LOG_TRACE 0 : set to 1 to enable printing reason for suppressed freq logs
 
-# CMake offers sometimes OLD behavior, where names that are defined below with
-# option() function, will be deleted if they are not in cache or do not have set
-# type - so effectively options provided through LIBSRT_* prefix would be rejected.
-# We do want these variables, obviously.
-cmake_policy(SET CMP0077 NEW) 
-
-# Import all options preceded with LIBSRT_ likely from a parent scope.
-# Names are not being checked, at worst it will set an unused variable.
-srt_import_parent_options()
-
 # option defaults
 set(ENABLE_HEAVY_LOGGING_DEFAULT OFF)
 
@@ -184,7 +174,6 @@ option(ENABLE_PKTINFO "Enable using IP_PKTINFO to allow the listener extracting 
 option(ENABLE_RELATIVE_LIBPATH "Should application contain relative library paths, like ../lib" OFF)
 option(ENABLE_GETNAMEINFO "In-logs sockaddr-to-string should do rev-dns" OFF)
 option(ENABLE_UNITTESTS "Enable unit tests" OFF)
-option(ENABLE_UNITTESTS_DISCOVERY "Do unit test discovery when unit tests enabled" ON)
 option(ENABLE_ENCRYPTION "Enable encryption in SRT" ON)
 option(ENABLE_AEAD_API_PREVIEW "Enable AEAD API preview in SRT" Off)
 option(ENABLE_MAXREXMITBW "Enable SRTO_MAXREXMITBW (v1.6.0 API preview)" Off)
@@ -342,7 +331,7 @@ if(WIN32)
 		check_function_exists(inet_pton HAVE_INET_PTON)
 		try_compile(AT_LEAST_VISTA
 			${CMAKE_BINARY_DIR}
-			"${CMAKE_CURRENT_SOURCE_DIR}/scripts/test_vista.c")
+			"scripts/test_vista.c")
 		if(NOT AT_LEAST_VISTA)
 			# force targeting Vista
 			add_definitions(-D_WIN32_WINNT=0x0600)
@@ -795,10 +784,10 @@ if (srt_libspec_static)
 endif()
 
 set (SRT_SRC_HAICRYPT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/haicrypt)
-set (SRT_SRC_SRTCORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/srtcore)
+set (SRT_SRC_SRTCORE_DIR srtcore)
 set (SRT_SRC_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 set (SRT_SRC_TOOLS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools)
-set (SRT_SRC_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test)
+set (SRT_SRC_TEST_DIR test)
 
 if(WIN32)
 	message(STATUS "DETECTED SYSTEM: WINDOWS;  WIN32=1; PTW32_STATIC_LIB=1")
@@ -983,28 +972,8 @@ elseif (MICROSOFT)
 else ()
 	find_package(Threads REQUIRED)
 	set(PTHREAD_LIBRARY ${CMAKE_THREAD_LIBS_INIT})
-	message(STATUS "Pthread library: ${PTHREAD_LIBRARY}")
 endif()
 
-set(CMAKE_REQUIRED_LIBRARIES "${PTHREAD_LIBRARY};${CMAKE_REQUIRED_LIBRARIES}")
-unset(CMAKE_REQUIRED_QUIET)
-
-check_symbol_exists(pthread_atfork "pthread.h" HAVE_PTHREAD_ATFORK)
-if ("${HAVE_PTHREAD_ATFORK}" STREQUAL "1")
-    add_definitions(-DHAVE_PTHREAD_ATFORK=1)
-endif ()
-
-# To avoid the need for other judgments when ENABLE_STDCXX_SYNC is OFF in the future, this is a separate conditional statement.
-if (NOT ENABLE_STDCXX_SYNC AND ENABLE_MONOTONIC_CLOCK)
-	check_symbol_exists(pthread_condattr_setclock "pthread.h" HAVE_PTHREAD_CONDATTR_SETCLOCK)
-	message(STATUS "Checking pthread_condattr_setclock: '${HAVE_PTHREAD_CONDATTR_SETCLOCK}'")
-	if ("${HAVE_PTHREAD_CONDATTR_SETCLOCK}" STREQUAL "1")
-		message(STATUS "FOUND pthread_condattr_setclock - pthread_cond_timedwait will use monotonic clock")
-		add_definitions(-DHAVE_PTHREAD_CONDATTR_SETCLOCK=1)
-	else ()
-		message(WARNING "NOT FOUND pthread_cond_timedwait. pthread_cond_timedwait will use system clock. Recommended -DENABLE_STDCXX_SYNC=ON")
-	endif ()
-endif ()
 # This is required in some projects that add some other sources
 # to the SRT library to be compiled together (aka "virtual library").
 if (DEFINED SRT_EXTRA_LIB_INC)
@@ -1581,7 +1550,7 @@ if (ENABLE_UNITTESTS AND ENABLE_CXX11)
 		message(STATUS "GTEST not found! Fetching from git.")
 		include(googletest)
 		fetch_googletest(
-			${PROJECT_SOURCE_DIR}/scripts
+				scripts
 			${PROJECT_BINARY_DIR}/googletest
 		)
 		set(GTEST_BOTH_LIBRARIES "gtest_main" CACHE STRING "Add gtest_main target")
@@ -1612,9 +1581,7 @@ if (ENABLE_UNITTESTS AND ENABLE_CXX11)
 		#set_tests_properties(test-srt PROPERTIES RUN_SERIAL TRUE)
 	else()
 		set_tests_properties(${tests_srt} PROPERTIES RUN_SERIAL TRUE)
-		if (ENABLE_UNITTESTS_DISCOVERY)
-			gtest_discover_tests(test-srt)
-		endif()
+		gtest_discover_tests(test-srt)
 	endif()
 
 	enable_testing()
